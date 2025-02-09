@@ -1,8 +1,16 @@
-
-.next
+# Ignore Next.js build files
+.next/
+out/
+.vercel/
 node_modules/
+
+# Ignore environment files
 .env
-*.log
-*.zip
-*.exe
-.DS_Store
+.env.local
+.env.development
+.env.production
+
+# Ignore logs and cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
