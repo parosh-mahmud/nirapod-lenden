@@ -1,16 +1,47 @@
 import { motion } from "framer-motion";
 import { useModal } from "@/context/ModalContext";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth } from "@/lib/firebaseConfig";
-import { FaGoogle } from "react-icons/fa"; // Import Google Icon
-
+import { FaGoogle, FaTimes } from "react-icons/fa"; // Import Google and Close Icons
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebaseConfig";
 export default function LoginModal() {
   const { isOpen, setIsOpen } = useModal();
 
   const handleGoogleLogin = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user; // Firebase user object
+
+      // Reference to the user's document in the "providers" collection
+      const userDocRef = doc(db, "providers", user.uid);
+      const docSnap = await getDoc(userDocRef);
+
+      if (!docSnap.exists()) {
+        // If the document does not exist, create a new document with the user's data
+        await setDoc(userDocRef, {
+          name: user.displayName,
+          email: user.email,
+          phone: user.phoneNumber || null,
+          photoURL: user.photoURL || null,
+          provider: user.providerData[0]?.providerId || "google",
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        // If the document exists, update with the latest login info (optional)
+        await setDoc(
+          userDocRef,
+          {
+            name: user.displayName,
+            email: user.email,
+            phone: user.phoneNumber || null,
+            photoURL: user.photoURL || null,
+            provider: user.providerData[0]?.providerId || "google",
+            lastLogin: new Date().toISOString(),
+          },
+          { merge: true } // Merges the fields with the existing document
+        );
+      }
       setIsOpen(false);
     } catch (error) {
       console.error("Login failed:", error);
@@ -26,8 +57,17 @@ export default function LoginModal() {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="bg-white rounded-lg p-8 shadow-xl w-full max-w-md"
+        className="bg-white rounded-lg p-8 shadow-xl w-full max-w-md relative"
       >
+        {/* X Close Button at the Top Right */}
+        <button
+          onClick={() => setIsOpen(false)}
+          className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
+          aria-label="Close"
+        >
+          <FaTimes className="text-xl" />
+        </button>
+
         {/* Modal Header */}
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-800">লগইন করুন</h2>
@@ -43,14 +83,6 @@ export default function LoginModal() {
         >
           <FaGoogle className="text-white text-xl mr-3" />
           <span>গুগল দিয়ে লগইন করুন</span>
-        </button>
-
-        {/* Cancel Button */}
-        <button
-          onClick={() => setIsOpen(false)}
-          className="mt-4 w-full py-3 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition"
-        >
-          বাতিল করুন
         </button>
       </motion.div>
     </div>

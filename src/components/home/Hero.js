@@ -1,6 +1,7 @@
 import Link from "next/link";
-
+import { useRouter } from "next/router";
 export default function Hero() {
+  const router = useRouter();
   return (
     <section className="bg-background text-white py-16">
       <div className="container mx-auto px-6 text-center">
@@ -12,7 +13,8 @@ export default function Hero() {
           হিসেবে, আমরা শতভাগ নিশ্চিত ও নিরাপদ পেমেন্ট প্রসেসিং সুবিধা প্রদান
           করি।"
         </p>
-        <Link href="/services">
+
+        <Link href="/transactionForm">
           <button className="mt-6 px-6 py-3 bg-primary text-white rounded-lg text-lg hover:bg-orange-600 transition">
             লেনদেন শুরু করুন
           </button>
