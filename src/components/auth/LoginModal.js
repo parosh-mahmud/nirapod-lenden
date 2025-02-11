@@ -1,15 +1,26 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useModal } from "@/context/ModalContext";
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { FaGoogle, FaTimes } from "react-icons/fa"; // Import Google and Close Icons
+import {
+  signInWithPopup,
+  signInWithRedirect,
+  GoogleAuthProvider,
+} from "firebase/auth";
+import { FaGoogle, FaTimes } from "react-icons/fa";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebaseConfig";
+
 export default function LoginModal() {
   const { isOpen, setIsOpen } = useModal();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+    const provider = new GoogleAuthProvider();
     try {
-      const provider = new GoogleAuthProvider();
+      // Attempt to sign in with a popup first
       const result = await signInWithPopup(auth, provider);
       const user = result.user; // Firebase user object
 
@@ -18,7 +29,7 @@ export default function LoginModal() {
       const docSnap = await getDoc(userDocRef);
 
       if (!docSnap.exists()) {
-        // If the document does not exist, create a new document with the user's data
+        // Create a new document if it doesn't exist
         await setDoc(userDocRef, {
           name: user.displayName,
           email: user.email,
@@ -28,7 +39,7 @@ export default function LoginModal() {
           createdAt: new Date().toISOString(),
         });
       } else {
-        // If the document exists, update with the latest login info (optional)
+        // Merge in the latest login info
         await setDoc(
           userDocRef,
           {
@@ -39,12 +50,28 @@ export default function LoginModal() {
             provider: user.providerData[0]?.providerId || "google",
             lastLogin: new Date().toISOString(),
           },
-          { merge: true } // Merges the fields with the existing document
+          { merge: true }
         );
       }
       setIsOpen(false);
     } catch (error) {
       console.error("Login failed:", error);
+      // Fallback: if the popup is blocked, try redirect sign-in
+      if (error.code === "auth/popup-blocked") {
+        try {
+          await signInWithRedirect(auth, provider);
+          // Note: signInWithRedirect will not return a result immediately.
+        } catch (redirectError) {
+          console.error("Redirect sign-in failed:", redirectError);
+          setError(
+            "Popup blocked and redirect sign-in failed. Please allow popups and try again."
+          );
+        }
+      } else {
+        setError("Login failed. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -59,7 +86,7 @@ export default function LoginModal() {
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="bg-white rounded-lg p-8 shadow-xl w-full max-w-md relative"
       >
-        {/* X Close Button at the Top Right */}
+        {/* Close Button */}
         <button
           onClick={() => setIsOpen(false)}
           className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
@@ -76,13 +103,27 @@ export default function LoginModal() {
           </p>
         </div>
 
+        {/* Display any error messages */}
+        {error && <div className="mt-4 text-red-500 text-center">{error}</div>}
+
         {/* Google Login Button */}
         <button
           onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center mt-6 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-orange-600 transition transform hover:scale-105 shadow-md"
+          disabled={isLoading}
+          className={`w-full flex items-center justify-center mt-6 py-3 bg-primary text-white font-semibold rounded-lg transition transform shadow-md ${
+            isLoading
+              ? "opacity-50 cursor-not-allowed"
+              : "hover:bg-orange-600 hover:scale-105"
+          }`}
         >
-          <FaGoogle className="text-white text-xl mr-3" />
-          <span>গুগল দিয়ে লগইন করুন</span>
+          {isLoading ? (
+            <span>Signing in...</span>
+          ) : (
+            <>
+              <FaGoogle className="text-white text-xl mr-3" />
+              <span>গুগল দিয়ে লগইন করুন</span>
+            </>
+          )}
         </button>
       </motion.div>
     </div>
