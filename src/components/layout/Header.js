@@ -160,6 +160,7 @@ import { useModal } from "@/context/ModalContext";
 import LoginModal from "@/components/auth/LoginModal";
 import { FaBars, FaTimes, FaUserCircle, FaBell } from "react-icons/fa";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import AuthModal from "../auth/AuthModal";
 
 export default function Header() {
   const { user, logout } = useContext(AuthContext);
@@ -316,7 +317,7 @@ export default function Header() {
       </header>
 
       {/* Login Modal */}
-      <LoginModal />
+      <AuthModal />
     </>
   );
 }
