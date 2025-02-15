@@ -215,7 +215,7 @@ export default function Transactions() {
                   {receivedTransactions.map((tran) => (
                     <li
                       key={tran.id}
-                      className="border p-4 rounded-lg mb-2 hover:bg-gray-50 cursor-pointer"
+                      className="border p-4 rounded-lg mb-2 hover:bg-gray-500 cursor-pointer"
                       onClick={() => setSelectedTransaction(tran)}
                     >
                       <p>
