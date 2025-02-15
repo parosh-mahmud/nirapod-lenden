@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
-
+import { getStorage } from "firebase/storage";
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAEEA-dH1ae0qog8Z_vD4Fj_-aLgzrsy0Y",
@@ -23,7 +23,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firestore
 const db = getFirestore(app);
-
+const storage = getStorage(app);
 // Initialize Analytics (only on the client)
 let analytics;
 if (typeof window !== "undefined") {
@@ -36,4 +36,4 @@ const database = getDatabase(app);
 // Initialize Authentication
 const auth = getAuth(app);
 
-export { auth, app, db, analytics, database };
+export { auth, app, db, analytics, database, storage };

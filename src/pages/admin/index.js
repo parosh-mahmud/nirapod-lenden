@@ -55,3 +55,55 @@ async function fetchAdminData() {
   // Fetch any admin-specific data from Firestore or an external API.
   return { totalUsers: 100, totalTransactions: 250 };
 }
+
+//pages/admin/index.js
+
+// import React from "react";
+// import AdminLayout from "@/components/admin/AdminLayout";
+// import { db } from "@/lib/firebaseConfig";
+// import { doc, getDoc } from "firebase/firestore";
+// import nookies from "nookies";
+// import { verifyIdToken } from "@/lib/firebaseAdmin";
+
+// export default function AdminPanel({ adminData }) {
+//   return (
+//     <AdminLayout>
+//       <div className="p-6">
+//         <h1 className="text-3xl font-bold mb-4">Admin Panel</h1>
+//         <p>Welcome to the admin dashboard. Here is some secured admin data:</p>
+//         <pre className="bg-gray-100 p-4 rounded mt-4">
+//           {JSON.stringify(adminData, null, 2)}
+//         </pre>
+//       </div>
+//     </AdminLayout>
+//   );
+// }
+
+// export async function getServerSideProps(context) {
+//   const cookies = nookies.get(context);
+//   const token = cookies.token;
+
+//   if (!token) {
+//     return {
+//       redirect: { destination: "/admin/login", permanent: false },
+//     };
+//   }
+
+//   try {
+//     const decodedToken = await verifyIdToken(token);
+//     const userId = decodedToken.uid;
+
+//     const userDocRef = doc(db, "users", userId);
+//     const userSnap = await getDoc(userDocRef);
+
+//     if (!userSnap.exists() || userSnap.data().role !== "admin") {
+//       return { redirect: { destination: "/", permanent: false } };
+//     }
+
+//     const adminData = { totalUsers: 100, totalTransactions: 250 };
+
+//     return { props: { adminData } };
+//   } catch (error) {
+//     return { redirect: { destination: "/admin/login", permanent: false } };
+//   }
+// }

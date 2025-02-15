@@ -410,19 +410,21 @@
 //   );
 // }
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
+import { storage, db } from "@/lib/firebaseConfig";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { FaMicrophone, FaStop } from "react-icons/fa";
+import { AuthContext } from "@/context/AuthProvider"; // <-- to get current user info
 
 export default function TransactionForm() {
+  const { user } = useContext(AuthContext); // <-- get logged-in user
+
   const [formData, setFormData] = useState({
     serviceType: "",
     contractDetails: "",
     amount: "",
     deadline: "",
-    additionalNotes: "",
     providerContact: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -433,7 +435,6 @@ export default function TransactionForm() {
 
   // For provider search results
   const [providerSearchResults, setProviderSearchResults] = useState([]);
-  // New state for the selected provider
   const [selectedProvider, setSelectedProvider] = useState(null);
 
   // Voice recording states
@@ -443,8 +444,8 @@ export default function TransactionForm() {
   const [audioURL, setAudioURL] = useState("");
   const [timerInterval, setTimerInterval] = useState(null);
 
-  // Initialize Firebase Storage
-  const storage = getStorage();
+  // // Initialize Firebase Storage
+  // const storage = getStorage();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -455,7 +456,7 @@ export default function TransactionForm() {
     setAttachedDocs(e.target.files);
   };
 
-  // Handler for searching the provider in Firestore based on email or phone number
+  // Search provider by email or phone from Firestore
   const handleSearchProvider = async () => {
     try {
       const input = formData.providerContact.trim();
@@ -464,12 +465,14 @@ export default function TransactionForm() {
         return;
       }
       const providersRef = collection(db, "providers");
-      // Query by email
       const emailQuery = query(providersRef, where("email", "==", input));
-      // Query by phone
       const phoneQuery = query(providersRef, where("phone", "==", input));
-      const emailSnapshot = await getDocs(emailQuery);
-      const phoneSnapshot = await getDocs(phoneQuery);
+
+      const [emailSnapshot, phoneSnapshot] = await Promise.all([
+        getDocs(emailQuery),
+        getDocs(phoneQuery),
+      ]);
+
       let results = [];
       emailSnapshot.forEach((doc) => {
         results.push({ id: doc.id, ...doc.data() });
@@ -477,6 +480,7 @@ export default function TransactionForm() {
       phoneSnapshot.forEach((doc) => {
         results.push({ id: doc.id, ...doc.data() });
       });
+
       if (results.length === 0) {
         alert("কোনো সেবা প্রদানকারী পাওয়া যায়নি।");
       }
@@ -487,7 +491,7 @@ export default function TransactionForm() {
     }
   };
 
-  // When a provider is selected, update the form data and set the selected provider state.
+  // Select a provider from the search results
   const handleSelectProvider = (provider) => {
     setSelectedProvider(provider);
     setFormData({
@@ -497,30 +501,33 @@ export default function TransactionForm() {
     setProviderSearchResults([]); // Clear search results after selection
   };
 
-  // Helper function to upload a single file to Firebase Storage
+  // Upload a single file to Firebase Storage and return its download URL
   const uploadFile = async (file) => {
-    // Create a reference with a unique name
     const fileRef = ref(storage, `uploads/${file.name}-${Date.now()}`);
     await uploadBytes(fileRef, file);
-    const url = await getDownloadURL(fileRef);
-    return url;
+    return await getDownloadURL(fileRef);
   };
 
-  // Helper function to upload audio Blob to Firebase Storage
+  // Upload audio Blob to Firebase Storage and return its download URL
   const uploadAudio = async (blob) => {
     const audioRef = ref(storage, `audio/${Date.now()}-recording.mp3`);
     await uploadBytes(audioRef, blob);
-    const url = await getDownloadURL(audioRef);
-    return url;
+    return await getDownloadURL(audioRef);
   };
 
-  // When the customer submits the form, create a new transaction document in Firestore.
+  // Submit the transaction
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Make sure user is logged in
+    if (!user) {
+      alert("আপনাকে লগইন করতে হবে লেনদেন জমা দিতে।");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Upload attached documents if any
+      // Upload attached documents
       const fileURLs = [];
       if (attachedDocs.length > 0) {
         for (let i = 0; i < attachedDocs.length; i++) {
@@ -529,41 +536,44 @@ export default function TransactionForm() {
         }
       }
 
+      // Construct transaction data
       const transactionData = {
         ...formData,
-        attachedDocs: fileURLs, // Save the file URLs
-        audioURL, // This should now be the permanent URL from Firebase Storage
+        attachedDocs: fileURLs,
+        audioURL, // from state
         createdAt: new Date().toISOString(),
         status: "submitted",
         provider: selectedProvider || null,
+
+        // Store sender info so that "sent requests" can show up properly
+        senderId: user.uid,
+        senderEmail: user.email,
       };
 
-      // Save the transaction document in the "transactions" collection.
+      // Save the transaction document
       await addDoc(collection(db, "transactions"), transactionData);
 
       setSuccessMessage("আপনার লেনদেনের অনুরোধ সফলভাবে জমা হয়েছে!");
-      // Reset form data after submission.
+      // Reset form
       setFormData({
         serviceType: "",
         contractDetails: "",
         amount: "",
         deadline: "",
-        additionalNotes: "",
         providerContact: "",
       });
       setAttachedDocs([]);
       setAudioURL("");
-      setProviderSearchResults([]);
       setSelectedProvider(null);
     } catch (error) {
       console.error("Error submitting transaction:", error);
-      alert("লেনদেন জমা দিতে সমস্যা হয়েছে, পুনরায় চেষ্টা করুন।");
+      alert("লেনদেন জমা দিতে সমস্যা হয়েছে, পুনরায় চেষ্টা করুন।");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Improved voice recording using a local chunks variable for preview and permanent storage upload.
+  // Start recording
   const startRecording = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("আপনার ব্রাউজার ভয়েস রেকর্ডিং সমর্থন করে না");
@@ -571,24 +581,27 @@ export default function TransactionForm() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      let chunks = []; // Local variable to store audio chunks
+      let chunks = [];
       const recorder = new MediaRecorder(stream);
+
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.push(e.data);
         }
       };
-      // When recording stops, upload the audio Blob to Firebase Storage
+
+      // When recording stops, upload to Firebase
       recorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: "audio/mp3" });
-        // Upload the blob and set the permanent URL
         const permanentURL = await uploadAudio(audioBlob);
         setAudioURL(permanentURL);
       };
+
       recorder.start();
       setIsRecording(true);
       setMediaRecorder(recorder);
       setRecordingTime(60);
+
       const interval = setInterval(() => {
         setRecordingTime((prev) => {
           if (prev <= 1) {
@@ -605,6 +618,7 @@ export default function TransactionForm() {
     }
   };
 
+  // Stop recording
   const stopRecording = () => {
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
@@ -615,7 +629,7 @@ export default function TransactionForm() {
     }
   };
 
-  // Clean up the timer when component unmounts.
+  // Cleanup
   useEffect(() => {
     return () => {
       if (timerInterval) {
@@ -631,7 +645,7 @@ export default function TransactionForm() {
           লেনদেনের তথ্য প্রদান ফর্ম
         </h2>
         <p className="text-gray-600 text-center mb-8">
-          আপনার চুক্তির তথ্য সমূহ সঠিকভাবে প্রদান করুন এবং সেবা প্রদানকারীর কাছে
+          আপনার চুক্তির তথ্য সঠিকভাবে প্রদান করুন এবং সেবা প্রদানকারীর কাছে
           পাঠান।
         </p>
 
@@ -643,7 +657,7 @@ export default function TransactionForm() {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* সেবা প্রদানকারীর যোগাযোগ তথ্য */}
+            {/* Provider Contact */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 সেবা প্রদানকারীর ফোন নাম্বার অথবা ইমেইল
@@ -665,9 +679,10 @@ export default function TransactionForm() {
                   সার্চ করুন
                 </button>
               </div>
-              {/* Display search results */}
+
+              {/* Provider Search Results */}
               {providerSearchResults.length > 0 && (
-                <div className="mt-2 border p-2 rounded">
+                <div className="mt-2 border p-2 rounded bg-gray-50">
                   <p className="text-gray-700 font-medium mb-2">
                     পাওয়া সেবা প্রদানকারী:
                   </p>
@@ -679,7 +694,6 @@ export default function TransactionForm() {
                       <div className="text-gray-800">
                         {provider.name} ({provider.email || provider.phone})
                       </div>
-                      {/* Button to select this provider */}
                       <button
                         type="button"
                         onClick={() => handleSelectProvider(provider)}
@@ -691,7 +705,8 @@ export default function TransactionForm() {
                   ))}
                 </div>
               )}
-              {/* Show selected provider */}
+
+              {/* Selected Provider */}
               {selectedProvider && (
                 <div className="mt-2 p-2 border rounded bg-green-50">
                   <p className="text-gray-800 font-medium">সেবা প্রদানকারী:</p>
@@ -702,7 +717,7 @@ export default function TransactionForm() {
               )}
             </div>
 
-            {/* সেবার ধরন নির্বাচন করুন */}
+            {/* Service Type */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 সেবার ধরন নির্বাচন করুন
@@ -724,7 +739,7 @@ export default function TransactionForm() {
               </select>
             </div>
 
-            {/* চুক্তির বিবরণ */}
+            {/* Contract Details */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 চুক্তির বিবরণ
@@ -734,42 +749,26 @@ export default function TransactionForm() {
                 value={formData.contractDetails}
                 onChange={handleChange}
                 required
-                rows="3"
+                rows={3}
                 placeholder="চুক্তির বিস্তারিত তথ্য লিখুন..."
                 className="w-full px-4 py-2 border rounded-lg focus:ring-primary focus:border-primary text-gray-800"
-              ></textarea>
+              />
             </div>
 
-            {/* অতিরিক্ত নোটস (যদি থাকে) */}
-            <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">
-                অতিরিক্ত নোটস
-              </label>
-              <textarea
-                name="additionalNotes"
-                value={formData.additionalNotes}
-                onChange={handleChange}
-                rows="2"
-                placeholder="অতিরিক্ত নোটস বা বিবরণ লিখুন..."
-                className="w-full px-4 py-2 border rounded-lg focus:ring-primary focus:border-primary text-gray-800"
-              ></textarea>
-            </div>
-
-            {/* ডকুমেন্ট সংযুক্ত করুন */}
+            {/* Attach Documents */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 ডকুমেন্ট সংযুক্ত করুন (যদি থাকে)
               </label>
               <input
                 type="file"
-                name="documents"
                 onChange={handleFileChange}
                 multiple
                 className="w-full px-4 py-2 border rounded-lg focus:ring-primary focus:border-primary text-gray-800"
               />
             </div>
 
-            {/* ভয়েস ইনপুট (আপনার লেনদেনের সার সংক্ষেপ) */}
+            {/* Voice Input */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 ভয়েস ইনপুট (আপনার লেনদেনের সার সংক্ষেপ)
@@ -820,7 +819,7 @@ export default function TransactionForm() {
               )}
             </div>
 
-            {/* পরিমাণ (টাকা) */}
+            {/* Amount */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 পরিমাণ (টাকা)
@@ -836,7 +835,7 @@ export default function TransactionForm() {
               />
             </div>
 
-            {/* নির্ধারিত সময়সীমা */}
+            {/* Deadline */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 নির্ধারিত সময়সীমা
@@ -851,15 +850,15 @@ export default function TransactionForm() {
               />
             </div>
 
-            {/* Submit Button */}
+            {/* Submit */}
             <button
               type="submit"
+              disabled={isSubmitting}
               className={`w-full px-6 py-3 text-white rounded-lg text-lg ${
                 isSubmitting
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-primary hover:bg-primary-dark transition"
               }`}
-              disabled={isSubmitting}
             >
               {isSubmitting
                 ? "তথ্যসমূহ পাঠানো হচ্ছে..."

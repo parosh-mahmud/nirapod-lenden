@@ -117,8 +117,19 @@ export default function AuthModal() {
         loginEmail,
         loginPassword
       );
-      // userCred.user -> The signed-in user
-      setIsOpen(false); // close modal
+      const user = userCred.user;
+
+      // Fetch the user's role from Firestore
+      const userDocRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(userDocRef);
+
+      if (docSnap.exists()) {
+        const userData = docSnap.data();
+        console.log("User Role:", userData.role); // 👈 Fetches the role
+        // You can store the role in state, context, or Redux
+      }
+
+      setIsOpen(false); // Close modal
     } catch (err) {
       console.error("Email login error:", err);
       setError(err.message || "Login failed. Please check your credentials.");
@@ -131,11 +142,15 @@ export default function AuthModal() {
   // SIGNUP HANDLER
   // --------------------------------------------------------------------------
   const handleSignUp = async () => {
-    setIsError(null);
+    setError(null);
     setIsLoading(true);
 
-    // Basic validation
-    if (!firstName || !lastName || !signupEmail || !signupPassword) {
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !signupEmail.trim() ||
+      !signupPassword.trim()
+    ) {
       setError("Please fill all required fields.");
       setIsLoading(false);
       return;
@@ -147,7 +162,7 @@ export default function AuthModal() {
     }
 
     try {
-      // Create user in Firebase Auth
+      // Create user in Firebase Authentication
       const userCred = await createUserWithEmailAndPassword(
         auth,
         signupEmail,
@@ -155,12 +170,15 @@ export default function AuthModal() {
       );
       const user = userCred.user;
 
-      // Optionally, update auth displayName
+      // Update Auth Profile (optional)
       await updateProfile(user, {
         displayName: `${firstName} ${lastName}`,
       });
 
-      // Create user doc in Firestore
+      // Set default role (change 'user' to 'admin' if needed)
+      const role = "user"; // Change to "admin" manually if needed
+
+      // Create user document in Firestore
       const userDocRef = doc(db, "users", user.uid);
       await setDoc(userDocRef, {
         displayName: `${firstName} ${lastName}`,
@@ -168,12 +186,12 @@ export default function AuthModal() {
         lastName,
         email: user.email,
         phone: phone || "",
-        provider: "password", // or emailPassword
+        provider: "password",
+        role, // 👈 Storing the role in Firestore
         createdAt: new Date().toISOString(),
       });
 
-      // Close modal
-      setIsOpen(false);
+      setIsOpen(false); // Close modal
     } catch (err) {
       console.error("Sign up error:", err);
       setError(err.message || "Sign up failed. Please try again.");
